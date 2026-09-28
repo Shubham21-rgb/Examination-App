@@ -60,19 +60,27 @@ To remain highly responsive during intensive testing windows, the Flask API offl
 ## 🛠️ Project Structure
 
 ```text
-├── backend/                  # Flask Application Root
-│   ├── app/
-│   │   ├── models.py         # SQLAlchemy Database Schemas
-│   │   ├── routes/           # Role-based API Blueprints (student, teacher, admin)
-│   │   └── tasks.py          # Asynchronous Celery Tasks
-│   ├── config.py             # App Configuration (Redis/DB URL strings)
-│   └── celery_worker.py      # Entry point for starting Celery workers
-├── frontend/                 # Vue.js Application Root
-│   ├── src/
-│   │   ├── components/       # Reusable UI Blocks (Timers, Question Forms)
-│   │   ├── views/            # Dashboard Views filtered by Role
-│   │   └── store/            # Pinia Global State Managed User Sessions
-└── README.md
+├──application
+     ├── config.py
+     ── database.py
+     ├── models.py
+     ├── routes.py
+     └── utils.py(student, teacher, admin)
+
+├──static
+     ├── components
+     └── script.js Celery workers
+     ├── frontend/                 
+     │   ├── src/
+     │   │   ├── components/       
+
+
+├──templates
+     └── index.html            
+       └── store/             
+app.py
+requirements.txt
+README.md
 ```
 
 ---
