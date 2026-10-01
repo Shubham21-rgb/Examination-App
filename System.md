@@ -30,7 +30,7 @@
 | **Course Code** | Backend         |
 | **Course Name** | Frontend        |
 | **Description** | Frontend        |
-| **Status**      | Frontend        |
+| **Status**      | Backend        |
 
 ---
 
