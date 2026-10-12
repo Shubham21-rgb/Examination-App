@@ -35,8 +35,8 @@ with app.app_context():
     db.create_all()
 
     app.security.datastore.find_or_create_role(name="admin",description="super user of app ")
-    app.security.datastore.find_or_create_role(name="patient",description="patient status user of app ")
-    app.security.datastore.find_or_create_role(name="doctor",description="doctor status user of app ")
+    app.security.datastore.find_or_create_role(name="examiner",description="examiner status user of app ")
+    app.security.datastore.find_or_create_role(name="student",description="student status user of app ")
     db.session.commit()
     if not app.security.datastore.find_user(email="Mastercontrol@admin.com"):
         app.security.datastore.create_user(username="MasterAdmin",
@@ -47,7 +47,12 @@ with app.app_context():
         app.security.datastore.create_user(username="Ravi21",
                                            email="RaviKisan@gmail.com",
                                            password=generate_password_hash("Hotis1234"),
-                                           roles=['patient'])
+                                           roles=['examiner'])
+    if not app.security.datastore.find_user(email="demostudent@gmail.com"):
+            app.security.datastore.create_user(username="Rahi",
+                                               email="demostudent@gmail.com",
+                                               password=generate_password_hash("Hotis1234"),
+                                               roles=['student'])
                                            
     db.session.commit()
 from application.routes import *
@@ -64,4 +69,3 @@ if __name__=="__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
 
 #pip3 install --upgrade setuptools
-
