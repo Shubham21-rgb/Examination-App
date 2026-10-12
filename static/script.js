@@ -1,5 +1,10 @@
+import Home from './components/Home.js';
+import Login from './components/Login.js';
+
+
 const routes =[
-    {path:'/',component:Home}
+    {path:'/',component:Home},
+    {path:'/login',component:Login}
 ]
 const router = new VueRouter({ // used to define the paths
     routes
@@ -11,9 +16,6 @@ const app = new Vue({
     template:`
     <div>
         <div class="container"><h1>Examination App</h1></div>
-        <ul>
-            <li><router-link to="/">Home</router-link></li>
-        </ul>
         <router-view></router-view>
     </div>
     `
