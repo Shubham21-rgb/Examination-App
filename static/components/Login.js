@@ -58,7 +58,18 @@ export default{
             .then(data => {
                 console.log(data);
                 if (data.success){
-                    this.$router.push('/');
+                    localStorage.setItem("auth-token",data["auth-token"])
+                    localStorage.setItem("role",data["role"])
+                    if (data.role == 'admin'){
+                        this.$router.push('/admin')
+                    }
+                    else if(data.role == 'student'){
+                        this.$router.push('/student')
+                    }
+                    else{
+                        this.$router.push('/examiner')
+                    }
+
                 }
                 else {
                     alert('Invalid username or password');

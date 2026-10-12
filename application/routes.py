@@ -27,12 +27,18 @@ def login():
     if user and user.active == True:
         if check_password_hash(user.password,password):
             login_user(user)
+            role=user.roles
+            role_assigned=""
+            for role in user.roles:
+                role_assigned=role.name
             return jsonify({
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
                 "error": "No error User Login Succes",
-                "success": True
+                "success": True,
+                "auth-token":user.get_auth_token(),
+                "role":role_assigned
             })
         else:
             return jsonify({'error':'Wrong Credentials'}),401
