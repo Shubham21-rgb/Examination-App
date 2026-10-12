@@ -1,13 +1,39 @@
 export default{
     template:`
-        <div>
-        <label for="username">Username:</label>
-        <input type="text" placeholder="Username" v-model="username">
-        <br><br><br>
-        <label for="username">Password:</label>
-        <input type="password" placeholder="***********" v-model="password">
-        <button @click="Login"> Login </button>
-        </div>
+        <div class="container mt-5" style="max-width: 400px;">
+  <div class="card p-4 shadow-sm">
+    <h3 class="text-center mb-4">Login</h3>
+    
+    <!-- Username Field -->
+    <div class="mb-3">
+      <label for="username" class="form-label">Username:</label>
+      <input 
+        type="text" 
+        id="username"
+        class="form-control" 
+        placeholder="Username" 
+        v-model="username"
+      >
+    </div>
+
+    <!-- Password Field -->
+    <div class="mb-4">
+      <label for="password" class="form-label">Password:</label>
+      <input 
+        type="password" 
+        id="password"
+        class="form-control" 
+        placeholder="***********" 
+        v-model="password"
+      >
+    </div>
+
+    <!-- Login Button -->
+    <button class="btn btn-primary w-100" @click="Login">
+      Login
+    </button>
+  </div>
+</div>
     `,
     data: function(){
         return{
