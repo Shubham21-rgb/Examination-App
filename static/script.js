@@ -1,12 +1,14 @@
 import Home from './components/Home.js';
 import Login from './components/Login.js';
 import Admin from './components/Admin.js';
+import create_admin_courses from './components/create_admin_courses.js';
 
 
 const routes =[
     {path:'/',component:Home},
     {path:'/login',component:Login},
-    {path:'/admin',component:Admin}
+    {path:'/admin',component:Admin},
+    {path:'/admin/courses',component:create_admin_courses}
 ]
 const router = new VueRouter({ // used to define the paths
     routes
