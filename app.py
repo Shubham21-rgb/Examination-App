@@ -69,3 +69,8 @@ if __name__=="__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
 
 #pip3 install --upgrade setuptools
+
+
+# Lets make this as suppose the Examiner Registers himself then how can you make 
+# this feature available such that when it registers the information 
+# should be stored in users as well as examiner
