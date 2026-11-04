@@ -19,7 +19,13 @@ export default{
           Go to Login
         </router-link>
       </div>
-
+      <!-- Registration Button -->
+      <br>
+      <div>
+        <router-link to="/register" class="btn btn-primary btn-lg px-5 shadow-sm">
+          Register
+        </router-link>
+      </div>
     </div>
   </div>
 </div>

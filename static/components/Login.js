@@ -32,6 +32,13 @@ export default{
     <button class="btn btn-primary w-100" @click="Login">
       Login
     </button>
+    <br>
+    <!-- Register Button -->
+      <div>
+        <router-link to="/register" class="btn btn-primary btn-lg px-5 shadow-sm">
+          Register
+        </router-link>
+      </div>
   </div>
 </div>
     `,

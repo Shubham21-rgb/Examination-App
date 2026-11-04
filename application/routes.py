@@ -7,7 +7,7 @@ from werkzeug.security import check_password_hash,generate_password_hash
 from .models import *
 from sqlalchemy import cast,Float
 import matplotlib.pyplot as plt
-from datetime import datetime
+from datetime import datetime,timedelta
 import uuid
 
 @app.route('/',methods=['GET'])
@@ -70,7 +70,7 @@ def admin_dashboard():
 @roles_required('admin')
 def get_courses():
 
-    courses = Course.query.all()
+    courses = Course.query.all()6
 
     return jsonify({
         "courses": [
@@ -1146,3 +1146,853 @@ def examiner_update_exam_status(exam_id):
         "success": True,
         "message": "Examination marked as completed."
     }), 200
+
+
+# ------------------- Studnet Area ----------------------
+
+
+# ============================================================
+# COMMON HELPERS
+# ============================================================
+
+def get_current_student():
+    """
+    Find the Student profile linked to the logged-in User.
+    """
+    return Student.query.filter_by(
+        user_id=current_user.id
+    ).first()
+
+
+def student_error_response():
+    return jsonify({
+        "success": False,
+        "message": "Student profile not found."
+    }), 404
+
+
+def is_active_booking(booking):
+    """
+    Statuses that represent a current booking.
+    """
+    return str(booking.booking_status or "").lower() not in [
+        "cancelled",
+        "canceled",
+        "rejected"
+    ]
+
+
+def is_exam_booking_open(exam):
+    """
+    Uses the admin-controlled student_booking_open field.
+    """
+    return bool(
+        getattr(exam, "student_booking_open", False)
+    )
+
+
+def is_exam_result_published(exam):
+    """
+    Results are hidden until the admin publishes them.
+    """
+    return bool(
+        getattr(exam, "results_published", False)
+    )
+
+
+def serialize_exam(exam):
+    return {
+        "exam_id": exam.exam_id,
+        "exam_name": exam.exam_name,
+        "course_id": exam.course_id,
+        "course_name": (
+            exam.course.course_name
+            if exam.course else None
+        ),
+        "exam_type": exam.exam_type,
+        "duration": exam.duration,
+        "max_marks": exam.max_marks,
+        "exam_status": exam.exam_status,
+        "booking_open": is_exam_booking_open(exam)
+    }
+
+
+def serialize_slot(slot):
+    exam = slot.examination
+
+    examiner_name = None
+
+    if slot.examiner and slot.examiner.user:
+        examiner_name = slot.examiner.user.username
+
+    return {
+        "slot_id": slot.slot_id,
+        "exam_id": slot.exam_id,
+        "exam_name": exam.exam_name if exam else None,
+        "date": (
+            slot.date.isoformat()
+            if slot.date else None
+        ),
+        "start_time": (
+            slot.start_time.strftime("%H:%M")
+            if slot.start_time else None
+        ),
+        "end_time": (
+            slot.end_time.strftime("%H:%M")
+            if slot.end_time else None
+        ),
+        "examiner_id": slot.examiner_id,
+        "examiner_name": examiner_name,
+        "max_student_capacity": slot.max_student_capacity,
+        "available_seats": slot.available_seats,
+        "status": slot.status
+    }
+
+
+def serialize_booking(booking):
+    slot = booking.slot
+    exam = slot.examination if slot else None
+
+    examiner_name = None
+
+    if slot and slot.examiner and slot.examiner.user:
+        examiner_name = slot.examiner.user.username
+
+    evaluation = Evaluation.query.filter_by(
+        booking_id=booking.booking_id
+    ).first()
+
+    can_cancel = False
+
+    if slot and slot.date and slot.start_time:
+        exam_datetime = datetime.combine(
+            slot.date,
+            slot.start_time
+        )
+
+        # Default cancellation deadline:
+        # 24 hours before the examination.
+        cancellation_deadline_hours = int(
+            getattr(exam, "cancellation_deadline_hours", 24)
+            if exam else 24
+        )
+
+        cancellation_deadline = exam_datetime - timedelta(
+            hours=cancellation_deadline_hours
+        )
+
+        can_cancel = (
+            is_active_booking(booking)
+            and datetime.now() < cancellation_deadline
+        )
+
+    return {
+        "booking_id": booking.booking_id,
+        "student_id": booking.student_id,
+        "slot_id": booking.slot_id,
+        "exam_id": slot.exam_id if slot else None,
+        "exam_name": exam.exam_name if exam else None,
+        "course_name": (
+            exam.course.course_name
+            if exam and exam.course else None
+        ),
+        "date": (
+            slot.date.isoformat()
+            if slot and slot.date else None
+        ),
+        "start_time": (
+            slot.start_time.strftime("%H:%M")
+            if slot and slot.start_time else None
+        ),
+        "end_time": (
+            slot.end_time.strftime("%H:%M")
+            if slot and slot.end_time else None
+        ),
+        "examiner_name": examiner_name,
+        "booking_status": booking.booking_status,
+        "evaluation_status": (
+            evaluation.status if evaluation else "pending"
+        ),
+        "can_cancel": can_cancel
+    }
+
+
+# ============================================================
+# 1. STUDENT DASHBOARD
+# GET /api/student/dashboard
+# ============================================================
+
+@app.route(
+    "/api/student/dashboard",
+    methods=["GET"]
+)
+@auth_required("token")
+@roles_required("student")
+def student_dashboard():
+
+    student = get_current_student()
+
+    if not student:
+        return student_error_response()
+
+    today = date.today()
+
+    # Available examinations
+    examinations = Examination.query.filter_by(
+        exam_status="active"
+    ).all()
+
+    available_examinations = [
+        exam for exam in examinations
+        if is_exam_booking_open(exam)
+    ]
+
+    # Available slots
+    all_slots = ExaminationSlot.query.filter(
+        ExaminationSlot.status == "available",
+        ExaminationSlot.available_seats > 0,
+        ExaminationSlot.date >= today
+    ).all()
+
+    available_slots = [
+        slot for slot in all_slots
+        if slot.examination
+        and is_exam_booking_open(slot.examination)
+    ]
+
+    # Student's bookings
+    bookings = Booking.query.filter_by(
+        student_id=student.student_id
+    ).all()
+
+    active_bookings = [
+        booking for booking in bookings
+        if is_active_booking(booking)
+    ]
+
+    upcoming_examinations = [
+        booking for booking in active_bookings
+        if booking.slot
+        and booking.slot.date
+        and booking.slot.date >= today
+    ]
+
+    return jsonify({
+        "success": True,
+        "stats": {
+            "available_examinations": len(
+                available_examinations
+            ),
+            "available_slots": len(available_slots),
+            "upcoming_examinations": len(
+                upcoming_examinations
+            ),
+            "booked_examinations": len(active_bookings)
+        }
+    }), 200
+
+
+# ============================================================
+# 2. GET AVAILABLE EXAMINATIONS
+# GET /api/student/examinations
+# ============================================================
+
+@app.route(
+    "/api/student/examinations",
+    methods=["GET"]
+)
+@auth_required("token")
+@roles_required("student")
+def student_examinations():
+
+    student = get_current_student()
+
+    if not student:
+        return student_error_response()
+
+    examinations = Examination.query.filter_by(
+        exam_status="active"
+    ).all()
+
+    return jsonify({
+        "success": True,
+        "examinations": [
+            serialize_exam(exam)
+            for exam in examinations
+        ]
+    }), 200
+
+
+# ============================================================
+# 3. GET AVAILABLE SLOTS
+# GET /api/student/slots
+# ============================================================
+
+@app.route(
+    "/api/student/slots",
+    methods=["GET"]
+)
+@auth_required("token")
+@roles_required("student")
+def student_available_slots():
+
+    student = get_current_student()
+
+    if not student:
+        return student_error_response()
+
+    today = date.today()
+
+    slots = ExaminationSlot.query.filter(
+        ExaminationSlot.status == "available",
+        ExaminationSlot.available_seats > 0,
+        ExaminationSlot.date >= today
+    ).order_by(
+        ExaminationSlot.date.asc(),
+        ExaminationSlot.start_time.asc()
+    ).all()
+
+    available_slots = []
+
+    for slot in slots:
+
+        exam = slot.examination
+
+        if not exam:
+            continue
+
+        if exam.exam_status != "active":
+            continue
+
+        if not is_exam_booking_open(exam):
+            continue
+
+        available_slots.append(
+            serialize_slot(slot)
+        )
+
+    return jsonify({
+        "success": True,
+        "slots": available_slots
+    }), 200
+
+
+# ============================================================
+# 4. BOOK AN EXAMINATION SLOT
+# POST /api/student/slots/<slot_id>/book
+# ============================================================
+
+@app.route(
+    "/api/student/slots/<int:slot_id>/book",
+    methods=["POST"]
+)
+@auth_required("token")
+@roles_required("student")
+def book_exam_slot(slot_id):
+
+    student = get_current_student()
+
+    if not student:
+        return student_error_response()
+
+    try:
+        # Lock the slot row while checking capacity.
+        slot = (
+            ExaminationSlot.query
+            .filter_by(slot_id=slot_id)
+            .with_for_update()
+            .first()
+        )
+
+        if not slot:
+            return jsonify({
+                "success": False,
+                "message": "Examination slot not found."
+            }), 404
+
+        exam = slot.examination
+
+        if not exam:
+            return jsonify({
+                "success": False,
+                "message": "Examination not found."
+            }), 404
+
+        if exam.exam_status != "active":
+            return jsonify({
+                "success": False,
+                "message": "This examination is not active."
+            }), 403
+
+        if not is_exam_booking_open(exam):
+            return jsonify({
+                "success": False,
+                "message": "Student booking is currently closed."
+            }), 403
+
+        if slot.status != "available":
+            return jsonify({
+                "success": False,
+                "message": "This slot is not available."
+            }), 400
+
+        if slot.available_seats <= 0:
+            return jsonify({
+                "success": False,
+                "message": "No seats are available in this slot."
+            }), 409
+
+        # Prevent booking another slot for the same examination.
+        existing_exam_booking = (
+            db.session.query(Booking)
+            .join(
+                ExaminationSlot,
+                Booking.slot_id == ExaminationSlot.slot_id
+            )
+            .filter(
+                Booking.student_id == student.student_id,
+                ExaminationSlot.exam_id == exam.exam_id
+            )
+            .all()
+        )
+
+        if any(
+            is_active_booking(booking)
+            for booking in existing_exam_booking
+        ):
+            return jsonify({
+                "success": False,
+                "message": (
+                    "You already have an active booking "
+                    "for this examination."
+                )
+            }), 409
+
+        # Check if this exact slot was previously booked.
+        existing_booking = Booking.query.filter_by(
+            student_id=student.student_id,
+            slot_id=slot.slot_id
+        ).first()
+
+        if existing_booking:
+            if is_active_booking(existing_booking):
+                return jsonify({
+                    "success": False,
+                    "message": "You have already booked this slot."
+                }), 409
+
+            # Reactivate a previously cancelled booking.
+            existing_booking.booking_status = "confirmed"
+            booking = existing_booking
+
+        else:
+            booking = Booking(
+                student_id=student.student_id,
+                slot_id=slot.slot_id,
+                booking_status="confirmed"
+            )
+
+            db.session.add(booking)
+
+        slot.available_seats -= 1
+
+        if slot.available_seats == 0:
+            slot.status = "full"
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Examination slot booked successfully.",
+            "booking_id": booking.booking_id
+        }), 201
+
+    except IntegrityError:
+        db.session.rollback()
+
+        return jsonify({
+            "success": False,
+            "message": "This slot has already been booked."
+        }), 409
+
+    except Exception:
+        db.session.rollback()
+
+        return jsonify({
+            "success": False,
+            "message": "Unable to book this examination slot."
+        }), 500
+
+
+# ============================================================
+# 5. GET STUDENT BOOKINGS
+# GET /api/student/bookings
+# ============================================================
+
+@app.route(
+    "/api/student/bookings",
+    methods=["GET"]
+)
+@auth_required("token")
+@roles_required("student")
+def student_bookings():
+
+    student = get_current_student()
+
+    if not student:
+        return student_error_response()
+
+    bookings = Booking.query.filter_by(
+        student_id=student.student_id
+    ).order_by(
+        Booking.booking_id.desc()
+    ).all()
+
+    active_bookings = [
+        booking for booking in bookings
+        if is_active_booking(booking)
+    ]
+
+    return jsonify({
+        "success": True,
+        "bookings": [
+            serialize_booking(booking)
+            for booking in active_bookings
+        ]
+    }), 200
+
+
+# ============================================================
+# 6. CANCEL BOOKING
+# PATCH /api/student/bookings/<booking_id>/cancel
+# ============================================================
+
+@app.route(
+    "/api/student/bookings/<int:booking_id>/cancel",
+    methods=["PATCH"]
+)
+@auth_required("token")
+@roles_required("student")
+def cancel_student_booking(booking_id):
+
+    student = get_current_student()
+
+    if not student:
+        return student_error_response()
+
+    booking = Booking.query.filter_by(
+        booking_id=booking_id,
+        student_id=student.student_id
+    ).first()
+
+    if not booking:
+        return jsonify({
+            "success": False,
+            "message": "Booking not found."
+        }), 404
+
+    if not is_active_booking(booking):
+        return jsonify({
+            "success": False,
+            "message": "This booking is already cancelled."
+        }), 400
+
+    slot = booking.slot
+    exam = slot.examination if slot else None
+
+    if not slot or not slot.date or not slot.start_time:
+        return jsonify({
+            "success": False,
+            "message": "Invalid examination slot."
+        }), 400
+
+    exam_datetime = datetime.combine(
+        slot.date,
+        slot.start_time
+    )
+
+    cancellation_deadline_hours = int(
+        getattr(exam, "cancellation_deadline_hours", 24)
+        if exam else 24
+    )
+
+    cancellation_deadline = exam_datetime - timedelta(
+        hours=cancellation_deadline_hours
+    )
+
+    if datetime.now() >= cancellation_deadline:
+        return jsonify({
+            "success": False,
+            "message": (
+                "Cancellation deadline has passed. "
+                "You can no longer cancel this booking."
+            )
+        }), 403
+
+    try:
+        booking.booking_status = "cancelled"
+
+        slot.available_seats = min(
+            slot.max_student_capacity,
+            slot.available_seats + 1
+        )
+
+        if slot.status == "full":
+            slot.status = "available"
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Booking cancelled successfully."
+        }), 200
+
+    except Exception:
+        db.session.rollback()
+
+        return jsonify({
+            "success": False,
+            "message": "Unable to cancel booking."
+        }), 500
+
+
+# ============================================================
+# 7. BOOKING HISTORY
+# GET /api/student/history
+# ============================================================
+
+@app.route(
+    "/api/student/history",
+    methods=["GET"]
+)
+@auth_required("token")
+@roles_required("student")
+def student_booking_history():
+
+    student = get_current_student()
+
+    if not student:
+        return student_error_response()
+
+    bookings = Booking.query.filter_by(
+        student_id=student.student_id
+    ).order_by(
+        Booking.booking_id.desc()
+    ).all()
+
+    return jsonify({
+        "success": True,
+        "history": [
+            serialize_booking(booking)
+            for booking in bookings
+        ]
+    }), 200
+
+
+# ============================================================
+# 8. PUBLISHED RESULTS
+# GET /api/student/results
+# ============================================================
+
+@app.route(
+    "/api/student/results",
+    methods=["GET"]
+)
+@auth_required("token")
+@roles_required("student")
+def student_results():
+
+    student = get_current_student()
+
+    if not student:
+        return student_error_response()
+
+    bookings = Booking.query.filter_by(
+        student_id=student.student_id
+    ).all()
+
+    results = []
+
+    for booking in bookings:
+
+        evaluation = Evaluation.query.filter_by(
+            booking_id=booking.booking_id
+        ).first()
+
+        if not evaluation:
+            continue
+
+        slot = booking.slot
+        exam = slot.examination if slot else None
+
+        if not exam:
+            continue
+
+        # Do not expose unpublished results.
+        if not is_exam_result_published(exam):
+            continue
+
+        if str(evaluation.status or "").lower() not in [
+            "submitted",
+            "completed",
+            "published"
+        ]:
+            continue
+
+        results.append({
+            "evaluation_id": evaluation.evaluation_id,
+            "booking_id": booking.booking_id,
+            "exam_id": exam.exam_id,
+            "exam_name": exam.exam_name,
+            "course_name": (
+                exam.course.course_name
+                if exam.course else None
+            ),
+            "marks_obtained": evaluation.marks_obtained,
+            "total_marks": evaluation.total_marks,
+            "remarks": evaluation.remarks,
+            "evaluation_date": (
+                evaluation.evaluation_date.isoformat()
+                if evaluation.evaluation_date else None
+            ),
+            "status": evaluation.status
+        })
+
+    return jsonify({
+        "success": True,
+        "results": results
+    }), 200
+
+
+# ============================================================
+# 9. GET STUDENT PROFILE
+# GET /api/student/profile
+# ============================================================
+
+@app.route(
+    "/api/student/profile",
+    methods=["GET"]
+)
+@auth_required("token")
+@roles_required("student")
+def get_student_profile():
+
+    student = get_current_student()
+
+    if not student:
+        return student_error_response()
+
+    user = User.query.get(current_user.id)
+
+    return jsonify({
+        "success": True,
+        "profile": {
+            "student_id": student.student_id,
+            "user_id": user.id,
+            "username": user.username,
+            "email": user.email
+        }
+    }), 200
+
+
+# ============================================================
+# 10. UPDATE STUDENT PROFILE
+# PUT /api/student/profile
+# ============================================================
+
+@app.route(
+    "/api/student/profile",
+    methods=["PUT"]
+)
+@auth_required("token")
+@roles_required("student")
+def update_student_profile():
+
+    student = get_current_student()
+
+    if not student:
+        return student_error_response()
+
+    user = User.query.get(current_user.id)
+
+    body = request.get_json(silent=True) or {}
+
+    username = body.get("username")
+    email = body.get("email")
+    new_password = body.get("new_password")
+
+    if not username or not email:
+        return jsonify({
+            "success": False,
+            "message": "Username and email are required."
+        }), 400
+
+    username = username.strip()
+    email = email.strip().lower()
+
+    if len(username) < 3:
+        return jsonify({
+            "success": False,
+            "message": "Username must contain at least 3 characters."
+        }), 400
+
+    if "@" not in email:
+        return jsonify({
+            "success": False,
+            "message": "Enter a valid email address."
+        }), 400
+
+    existing_email = User.query.filter(
+        User.email == email,
+        User.id != user.id
+    ).first()
+
+    if existing_email:
+        return jsonify({
+            "success": False,
+            "message": "This email address is already registered."
+        }), 409
+
+    try:
+        user.username = username
+        user.email = email
+
+        if new_password:
+            if len(new_password) < 8:
+                return jsonify({
+                    "success": False,
+                    "message": (
+                        "New password must contain at least "
+                        "8 characters."
+                    )
+                }), 400
+
+            user.password = generate_password_hash(new_password)
+
+        user.updated_at = datetime.utcnow()
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Profile updated successfully."
+        }), 200
+
+    except IntegrityError:
+        db.session.rollback()
+
+        return jsonify({
+            "success": False,
+            "message": "Username or email already exists."
+        }), 409
+
+    except Exception:
+        db.session.rollback()
+
+        return jsonify({
+            "success": False,
+            "message": "Unable to update profile."
+        }), 500
+
+
+from .register import *
