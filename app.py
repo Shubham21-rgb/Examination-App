@@ -5,31 +5,32 @@ from application.config import LocalDevelopmentConfig
 from flask_security import Security,SQLAlchemyUserDatastore
 from werkzeug.security import generate_password_hash
 #from application.resources import api
-# from application.celery_init import celery_init_app
-#from celery.schedules import crontab
+from application.celery_init import celery_init_app
+from celery.schedules import crontab
 #here we will use the hash password for encrypting the password
 from flask_security import hash_password
-# from flask_caching import Cache
+from flask_caching import Cache
+from application.task import monthly_report
 
 # Redis cache setup
-# cache = Cache(config={
-#     "CACHE_TYPE": "RedisCache",
-#     "CACHE_DEFAULT_TIMEOUT": 60,  # 1 minute default
-#     "CACHE_REDIS_URL": "redis://localhost:6379/0"
-# })
+cache = Cache(config={
+    "CACHE_TYPE": "RedisCache",
+    "CACHE_DEFAULT_TIMEOUT": 60,  # 1 minute default
+    "CACHE_REDIS_URL": "redis://localhost:6379/0"
+})
 def create_app():
     app=Flask(__name__)
     app.config.from_object(LocalDevelopmentConfig)
     db.init_app(app)
     #api.init_app(app)
-    #cache.init_app(app)
+    cache.init_app(app)
     datastore=SQLAlchemyUserDatastore(db,User,Role)
     app.security=Security(app,datastore)
     app.app_context().push()
     return app
 app=create_app()
-#celery=celery_init_app(app)
-#celery.autodiscover_tasks()
+celery=celery_init_app(app)
+celery.autodiscover_tasks()
 
 with app.app_context():
     db.create_all()
@@ -59,12 +60,12 @@ from application.routes import *
 
 
 
-# @celery.on_after_finalize.connect 
-# def setup_periodic_tasks(sender, **kwargs):
-#     sender.add_periodic_task(
-#         crontab(minute = '*/1'),
-#         monthly_report.s(),
-#     )
+@celery.on_after_finalize.connect 
+def setup_periodic_tasks(sender, **kwargs):
+    sender.add_periodic_task(
+        crontab(minute = '*/1'),
+        monthly_report.s(),
+    )
 if __name__=="__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
 
