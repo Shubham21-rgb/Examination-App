@@ -64,7 +64,7 @@ from application.routes import *
 def setup_periodic_tasks(sender, **kwargs):
     sender.add_periodic_task(
         crontab(minute = '*/1'),
-        monthly_report.s(),
+        monthly_report.s("some_id_here"),
     )
 if __name__=="__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

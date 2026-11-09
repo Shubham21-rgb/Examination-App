@@ -5,6 +5,7 @@ import create_admin_courses from './components/create_admin_courses.js';
 import examiner from './components/examiner.js';
 import student from './components/student.js';
 import register from './components/register.js';
+import admin_examiners from './components/admin_examiners.js';
 
 
 const routes =[
@@ -14,7 +15,8 @@ const routes =[
     {path:'/admin/courses',component:create_admin_courses},
     {path:'/examiner',component:examiner},
     {path:'/student',component:student},
-    {path:'/register',component:register}
+    {path:'/register',component:register},
+    { path: '/admin/examiners',component: admin_examiners}
 ]
 const router = new VueRouter({ // used to define the paths
     routes

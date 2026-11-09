@@ -6,7 +6,7 @@ import csv
 from .utils import format_report
 from .mail import send_email
 import requests
-
+from application.database import db
 # @shared_task(ignore_result=False,name="download_csv_report")
 # def csv_report(pat_id):
 #     transactions = Appointment.query.filter_by(patient_id=pat_id) # admin
@@ -24,21 +24,33 @@ import requests
 #     return csv_file_name
 
 
-@shared_task(ignore_result = False, name = "monthly_report")
-def monthly_report(id=None):
+@shared_task(ignore_result=False, name="monthly_report")
+def monthly_report(id):
     today = datetime.date.today()
-    data={
-        "username":User.username,
-        "password":User.password,
-        "time":today
+    info = db.session.get(User, id)
+    
+    if not info:
+        return f"User with id {id} not found"
+        
+    print("Details are ", info)
+    
+    data = {
+        "username": info.username,
+        "password": info.password,
+        "time": today.strftime("%Y-%m-%d")
     }
-    report_data={}
+    
+    # Initialize the key structure properly before appending
+    report_data = {"creds": []}
     report_data['creds'].append(data)
-    message = format_report('templates/mail_details.html', report_data)
-    if User.username and User.password:
-        send_email(User.password, subject = "User Credentials", message = message)
-
-    return "Monthly reports sent"
+    
+    message = format_report('templates/mail_details.html', data=report_data)
+    
+    if info.email:
+        send_email(to_address=info.email, subject="User Credentials", message=message)
+        return f"Monthly report sent to {info.email}"
+        
+    return "Monthly report failed: No email set for user"
 
 
 # @shared_task(ignore_result=False,name="delivery_update")

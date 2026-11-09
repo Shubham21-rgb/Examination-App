@@ -11,7 +11,7 @@
         <!-- Logo -->
         <div class="row">
             <div class="text-center mb-3">
-                <img src="http://localhost:5000/static/smartpark_logo.png" alt="Hospital Logo" style="width:200px;">
+                <img src="http://localhost:5000/static/smartpark_logo.png" alt="Logo" style="width:200px;">
             </div>
         </div>
 
@@ -22,7 +22,7 @@
 
         <!-- Greeting -->
         <div class="row">
-            <p class="fs-6">Here is a summary of your credentials </p>
+            <p class="fs-6">Here is a summary of your credentials:</p>
         </div>
 
         <!-- Transaction Table -->
@@ -31,24 +31,24 @@
                 <thead class="table-primary text-center">
                     <tr>
                         <th scope="col">#</th>
-                        <th scope="col">UserName </th>
+                        <th scope="col">UserName</th>
                         <th scope="col">Password</th>
                         <th scope="col">Date</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% set appointments = data.get('creds', []) %}
-                    {% for r in appointments %}
+                    {% set credentials_list = data.get('creds', []) %}
+                    {% for r in credentials_list %}
                     <tr>
                         <td class="text-center">{{ loop.index }}</td>
                         <td>{{ r.get('username', '-') }}</td>
-                        <td>{{ r.get('password ', '-') }}</td>
-                        <td>{{ r.get('time ', '-') }}</td>
+                        <td>{{ r.get('password', '-') }}</td>
+                        <td>{{ r.get('time', '-') }}</td>
                     </tr>
                     {% endfor %}
-                    {% if appointments|length == 0 %}
+                    {% if credentials_list|length == 0 %}
                     <tr>
-                        <td colspan="7" class="text-center text-muted">No credentials</td>
+                        <td colspan="4" class="text-center text-muted">No credentials available</td>
                     </tr>
                     {% endif %}
                 </tbody>
@@ -58,7 +58,7 @@
         <!-- Footer -->
         <div class="text-center border-top pt-3 mt-4">
             <p class="text-secondary small mb-1">
-                Examination Services | © Shubham| All Rights Reserved
+                Examination Services | © Shubham | All Rights Reserved
             </p>
             <p class="small text-muted mb-0">
                 Generated digitally by Examination Management System.

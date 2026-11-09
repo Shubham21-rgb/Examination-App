@@ -70,7 +70,7 @@ def admin_dashboard():
 @roles_required('admin')
 def get_courses():
 
-    courses = Course.query.all()6
+    courses = Course.query.all()
 
     return jsonify({
         "courses": [
@@ -458,7 +458,57 @@ def booking_has_started(exam, slot=None):
         return True
 
     return False
+#-------------------------------------------
+#------- ADMIN EXAMINER REGISTARTION ------
+#--------------------------------------------
 
+from .task import monthly_report 
+
+@app.route("/api/admin/examiners",methods=['POST'])
+@auth_required("token")
+@roles_required("admin")
+def create_examiner_new():
+    body=request.get_json()
+    print(body)
+    user=app.security.datastore.create_user(username=body.get('username'),
+                                               email=body.get('email'),
+                                               password=body.get('password'),
+                                               roles=['examiner'])
+    db.session.commit()
+    print("User ID is ",user.id)
+    res = monthly_report.delay(id=user.id)
+    return jsonify({
+        "message":"Succesfully in Registering"
+    }),200
+
+@app.route("/api/admin/examiners",methods=['GET'])
+@auth_required("token")
+@roles_required("admin")
+def create_examiner_new_new():
+
+    examiner = User.query.all()
+
+    details = []
+    # for user in examiner:
+    #     print(f"{user} and roles is {user.roles[0].name}")
+
+    for user in examiner:
+        for role in user.roles:
+            if role.name == 'examiner':
+
+                details.append({
+                    "user_id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "active": user.active
+                })
+
+                break
+
+    return jsonify({
+        "success": True,
+        "examiners": details
+    }), 200
 
 # =========================================================
 # 1. EXAMINER DASHBOARD
